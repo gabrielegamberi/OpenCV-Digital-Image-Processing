@@ -1,0 +1,6 @@
+1) Per far funzionare il tutto devi innanzitutto modificare le dipendenze
+nel file CMakeLists.txt
+2) Crea una folder "build"
+3) Entra in "build" e usa il comando "cmake .."
+4) Compila il tutto con "make"
+5) Off you go!

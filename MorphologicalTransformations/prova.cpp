@@ -18,7 +18,7 @@ class MorphTransform{
 		Mat outputMatrix;
 		int N;
 		int M;
-		tuple<int,int> centerCoord; //x,y coordinates of structElem's reference
+		pair<int,int> centerCoord; //x,y coordinates of structElem's reference
 		int pad;
 	
 	bool isOutsideTheMatrix(int row, int col){
@@ -33,7 +33,7 @@ class MorphTransform{
 			N = source.rows;
 			M = source.cols;
 			pad = PAD(structElem.rows);
-			centerCoord = make_tuple(0,0);	//the center is supposed to be one
+			centerCoord = make_pair(0,0);	//the center is supposed to be one
 		}
 
 		void erode(int nTimes=1){
@@ -49,8 +49,8 @@ class MorphTransform{
 									if(isOutsideTheMatrix(row+i,col+j))
 										continue;
 									if(structElem.at<uchar>(i+pad,j+pad)==1 && temp.at<uchar>(row+i,col+j)==0 && 
-									!isOutsideTheMatrix(row+get<0>(centerCoord),col+get<1>(centerCoord))){
-										outputMatrix.at<uchar>(row+get<0>(centerCoord),col+get<1>(centerCoord)) = 0;
+									!isOutsideTheMatrix(row+centerCoord.first,col+centerCoord.second)){
+										outputMatrix.at<uchar>(row+centerCoord.first,col+centerCoord.second) = 0;
 										isEroded = true;
 										break;
 									}
@@ -69,8 +69,8 @@ class MorphTransform{
 				temp = outputMatrix.clone();
 				for(int row=0; row<N; row++)
 					for(int col=0; col<M; col++){
-						if(!isOutsideTheMatrix(row+get<0>(centerCoord),col+get<1>(centerCoord)) &&
-							temp.at<uchar>(row+get<0>(centerCoord),col+get<1>(centerCoord))==255)//if the actual pixel has to be dilated
+						if(!isOutsideTheMatrix(row+centerCoord.first,col+centerCoord.second) &&
+							temp.at<uchar>(row+centerCoord.first,col+centerCoord.second)==255)//if the actual pixel has to be dilated
 								for(int i=-pad; i<=pad; i++) //I replicate the whole structure (where the ones are set)
 									for(int j=-pad; j<=pad; j++)
 										if(structElem.at<uchar>(i+pad,j+pad)==1 && !isOutsideTheMatrix(row+i,col+j))

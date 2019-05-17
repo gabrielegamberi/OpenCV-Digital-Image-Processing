@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
 	Mat outputMatrix = sourceMatrix.clone();
 	
 	//Before calling Hough we have to apply some blurring to the image (dim: 5x5) to then use Canny Edge Detector
-	GaussianBlur(sourceMatrix, blurredMatrix, Size(5,5), 1.4, 0.0);
+	GaussianBlur(sourceMatrix, blurredMatrix, Size(5,5), 1.45, 0.1);
 	imshow("Gaussian Blur", blurredMatrix);
 
 	Canny(blurredMatrix, edgeMatrix, 60, 150, 3); //(InMatrix, OutMatrix, Threshold #1 & 2 for hysteresis, dim. SobelKernel)

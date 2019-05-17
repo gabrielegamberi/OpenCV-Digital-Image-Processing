@@ -49,7 +49,7 @@ int main(int argc, char** argv) {
 
 void HoughTransformLine(Mat edgeMatrix, Mat& outputMatrix) {
 	int maxDistance = max(edgeMatrix.rows, edgeMatrix.cols)*sqrt(2);
-	Mat votes = Mat::zeros(maxDistance, 180, CV_8UC1);	//initialize to 0
+	Mat votes = Mat::zeros(2*maxDistance, 180, CV_8UC1);	//initialize to 0
 	
 	double rho, theta;
 
@@ -59,12 +59,13 @@ void HoughTransformLine(Mat edgeMatrix, Mat& outputMatrix) {
 			//if the current pixel is an edge pixel
 			if(edgeMatrix.at<uchar>(y,x) > 250){	
 				//for all the possible lines for that point (0->180)
-				for(theta=0; theta<180; theta++){
+				for(int t=0; t<180; t++){
+					theta = (t-90)*RADCOEF;
 					//rho = xcos(theta in rad.) + ysin(theta in rad.)     -> convert theta in radiants
-					rho = cvRound(x*cos(theta*RADCOEF) + y*sin(theta*RADCOEF));
+					rho = maxDistance+cvRound(x*cos(theta) + y*sin(theta));
 					//If rho is < 0 add max_distance to it. if it is > than the max_distance, subtract from it.
-					rho = rho<0? rho+maxDistance : rho>maxDistance? rho-maxDistance : rho;
-					votes.at<uchar>(rho, theta)++;
+					//rho = rho<0? rho+maxDistance : rho>maxDistance? rho-maxDistance : rho;
+					votes.at<uchar>(rho, t)++;
 				}
 			}
 		}
@@ -83,8 +84,8 @@ void HoughTransformLine(Mat edgeMatrix, Mat& outputMatrix) {
 	for(int r=0; r<votes.rows; r++) {
 		for(int t=0; t<180; t++) {
 			if(votes.at<uchar>(r,t) >= houghThreshold) {
-				rho = r;
-				theta = t*RADCOEF;
+				rho = r-maxDistance;
+				theta = (t-90)*RADCOEF;
 				calcXYCoord(rho, theta, P1, P2);
 				//push the points into the vector
 				lines.push_back(make_pair(P1,P2));

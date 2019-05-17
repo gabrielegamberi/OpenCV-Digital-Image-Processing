@@ -7,7 +7,7 @@
 using namespace std;
 using namespace cv;
 
-int houghTreshold;
+int houghThreshold;
 
 void HoughTransformLine(Mat, Mat&);
 void calcXYCoord(double, double, Point&, Point&);
@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
 		exit(EXIT_FAILURE);
 	}
 	Mat sourceMatrix = imread(argv[1], IMREAD_GRAYSCALE);
-	houghTreshold = atoi(argv[2]);
+	houghThreshold = atoi(argv[2]);
 	
 	if(sourceMatrix.empty()){
 		cerr<< "Image format not valid." << endl;
@@ -82,7 +82,7 @@ void HoughTransformLine(Mat edgeMatrix, Mat& outputMatrix) {
 	//we must translate the polar coordinate to the cartesian one, and create the relative points to display.
 	for(int r=0; r<votes.rows; r++) {
 		for(int t=0; t<180; t++) {
-			if(votes.at<uchar>(r,t) >= houghTreshold) {
+			if(votes.at<uchar>(r,t) >= houghThreshold) {
 				rho = r;
 				theta = t*RADCOEF;
 				calcXYCoord(rho, theta, P1, P2);

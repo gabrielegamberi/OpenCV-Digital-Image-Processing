@@ -15,7 +15,6 @@ using namespace cv;
 int lowThreshold;
 
 void HoughTransformCircle(Mat edgeMatrix, Mat& outputMatrix, int rmin, int rmax) {
-	cout<<"RMIN: "<<rmin<<"\tRMAX: "<<rmax<<endl;
 	double theta;
 	
 	int radius = rmin;

@@ -21,11 +21,11 @@ Mat mask = (Mat_<char>(LEN,LEN)<<1,1,1,
 );
 */
 
-Mat vertSobel = (Mat_<char>(SOBEL_SIZE,SOBEL_SIZE)<<-1,-2,-1,
+Mat horSobel = (Mat_<char>(SOBEL_SIZE,SOBEL_SIZE)<<-1,-2,-1,
 									   				 0, 0, 0,
 									   				 1, 2, 1
 );
-Mat horSobel = (Mat_<char>(SOBEL_SIZE,SOBEL_SIZE)<<-1, 0, 1,
+Mat vertSobel = (Mat_<char>(SOBEL_SIZE,SOBEL_SIZE)<<-1, 0, 1,
 									    			-2, 0, 2,
 									    			-1, 0, 1
 );

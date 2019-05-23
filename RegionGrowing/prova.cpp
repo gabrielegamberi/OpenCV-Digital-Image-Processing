@@ -8,9 +8,6 @@
 #include <list>
 #include <time.h>
 
-//#define RADCOEF CV_PI/180
-#define RADCOEF CV_PI/180
-
 using namespace std;
 using namespace cv;
 
@@ -50,7 +47,7 @@ class Region{
 		static void init(char *fileName, float threshold){
 			srand(time(NULL));
 			sourceMatrix = imread(fileName, IMREAD_GRAYSCALE);	//cv::resize(sourceMatrix, sourceMatrix, cv::Size(), 1, 1);
-			blur(sourceMatrix, sourceMatrix, Size(3,3), Point(-1,-1));
+			//blur(sourceMatrix, sourceMatrix, Size(3,3), Point(-1,-1));
 			outputMatrix = Mat::zeros(sourceMatrix.size(), sourceMatrix.type()); //sourceMatrix.clone();
 			cvtColor(outputMatrix, outputMatrix, COLOR_GRAY2BGR);
 			visitedMatrix = Mat::zeros(sourceMatrix.size(), sourceMatrix.type());
@@ -67,6 +64,7 @@ class Region{
 
 		void addPoint(Point newPoint){
 			points.push_front(newPoint);
+			visitedMatrix.at<uchar>(newPoint) = 1;
 			if(points.size() == 1){
 				mean = getPixelVal(newPoint);
 				variance = 0;
@@ -82,13 +80,11 @@ class Region{
 			while(!processList.empty()){
 				Point curPoint = processList.front(); 
 				processList.pop_front();
-				visitedMatrix.at<uchar>(curPoint) = 1;
 				for(int i=-1; i<=1; i++){
 					for(int j=-1; j<=1; j++){
 						Point neighPoint = Point(curPoint.x+i, curPoint.y+j);
 						if((i|j)!=0 && isInsideRange(neighPoint)){
 							if(visitedMatrix.at<uchar>(neighPoint) == 0){
-								//float aftVariance = pushInsideRegion(neighPoint);
 								float aftVariance = testVariance(neighPoint);
 								if(aftVariance<varThreshold){
 									addPoint(neighPoint);
@@ -102,7 +98,6 @@ class Region{
 		}
 		void recursiveGrow(Point curPoint){
 			addPoint(curPoint);
-			visitedMatrix.at<uchar>(curPoint) = 1;
 			for(int i=-1; i<=1; i++){
 				for(int j=-1; j<=1; j++){
 					Point neighPoint = Point(curPoint.x+i, curPoint.y+j);
@@ -140,7 +135,7 @@ Mat Region::visitedMatrix;
 
 
 /*Region Growing from a standard seed (iterative version)*/
-void regionGrowing(){
+void regionGrowing(int nSeeds){
 	double minVal = 0;
 	Point newSeed(rand()%Region::sourceMatrix.cols, rand()%Region::sourceMatrix.rows);
 	do{
@@ -148,13 +143,17 @@ void regionGrowing(){
 		newRegion.grow();
 		if(newRegion.getRegionSize()>10)
 			newRegion.color();
-		minMaxLoc(Region::visitedMatrix, &minVal, nullptr, &newSeed, nullptr);
+		if(nSeeds>0){
+			newSeed = Point(rand()%Region::sourceMatrix.cols, rand()%Region::sourceMatrix.rows);
+			nSeeds--;
+		}else
+			minMaxLoc(Region::visitedMatrix, &minVal, nullptr, &newSeed, nullptr);
 	}while(minVal==0);
 	imwrite("region.png", Region::outputMatrix);
 }
 
 /*Region Growing from a standard seed (iterative version)*/
-void recursiveRegionGrowing(){
+void recursiveRegionGrowing(int nSeeds){
 	double minVal = 0;
 	Point newSeed(rand()%Region::sourceMatrix.cols, rand()%Region::sourceMatrix.rows);
 	do{
@@ -162,7 +161,11 @@ void recursiveRegionGrowing(){
 		newRegion.recursiveGrow(newSeed);
 		if(newRegion.getRegionSize()>10)
 			newRegion.color();
-		minMaxLoc(Region::visitedMatrix, &minVal, nullptr, &newSeed, nullptr);
+		if(nSeeds>0){
+			newSeed = Point(rand()%Region::sourceMatrix.cols, rand()%Region::sourceMatrix.rows);
+			nSeeds--;
+		}else
+			minMaxLoc(Region::visitedMatrix, &minVal, nullptr, &newSeed, nullptr);
 	}while(minVal==0);
 	imwrite("region.png", Region::outputMatrix);
 }
@@ -199,8 +202,8 @@ int main(int argc, char** argv) {
 	namedWindow("source", WINDOW_AUTOSIZE);
 	imshow("source", Region::sourceMatrix);
 	waitKey(0);
-	//recursiveRegionGrowing();
-	regionGrowing();
+	recursiveRegionGrowing(10);
+	//regionGrowing(10);
 	//regionGrowingScan(4,15);		// #seeds, spacing ai lati (utile per spaziare i seed dai margini)
 	
 	return 0;

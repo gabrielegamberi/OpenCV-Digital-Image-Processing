@@ -22,7 +22,7 @@ class MorphTransform{
 		int pad;
 	
 	bool isOutsideTheMatrix(int row, int col){
-		if(row<0 || row>N || col<0 || col>M)
+		if(row<0 || row>=N || col<0 || col>=M)
 			return true;
 		return false;
 	}

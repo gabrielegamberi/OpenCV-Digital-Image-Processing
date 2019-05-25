@@ -14,64 +14,50 @@ using namespace cv;
 class Region{
 	private:
 		Point seed;
-		float mean;
-		float variance;
 		list<Point> points;
 
 	public:
 		static Mat sourceMatrix;
 		static Mat outputMatrix;
 		static Mat visitedMatrix;
-		static float varThreshold;
+		static float eucThreshold;
 		
 		Region(){}
 
 		Region(Point seed){
 			this->seed = seed;
-			//pushInsideRegion(seed);
 			addPoint(seed);
 		}
-
-		static int getPixelVal(Point point){
-			return sourceMatrix.at<uchar>(point);
-		}
-
 		inline int getRegionSize(){return points.size();}
 		
 		static bool isInsideRange(Point point){
-			if(point.x<0 || point.y<0 || point.x>sourceMatrix.cols || point.y>sourceMatrix.rows)
+			if(point.x<0 || point.y<0 || point.x>=sourceMatrix.cols || point.y>=sourceMatrix.rows)
 				return false;
 			return true;
 		}
 
 		static void init(char *fileName, float threshold){
 			srand(time(NULL));
-			sourceMatrix = imread(fileName, IMREAD_GRAYSCALE);	//cv::resize(sourceMatrix, sourceMatrix, cv::Size(), 1, 1);
-			//blur(sourceMatrix, sourceMatrix, Size(3,3), Point(-1,-1));
+			sourceMatrix = imread(fileName, IMREAD_COLOR);	
+			cv::resize(sourceMatrix, sourceMatrix, cv::Size(), 0.5, 0.5);
+			blur(sourceMatrix, sourceMatrix, Size(3,3), Point(-1,-1));
 			outputMatrix = Mat::zeros(sourceMatrix.size(), sourceMatrix.type()); //sourceMatrix.clone();
-			cvtColor(outputMatrix, outputMatrix, COLOR_GRAY2BGR);
-			visitedMatrix = Mat::zeros(sourceMatrix.size(), sourceMatrix.type());
-			varThreshold = threshold;
+			visitedMatrix = Mat::zeros(sourceMatrix.size(), CV_8UC1);
+			eucThreshold = threshold;
 		}
 
-		double testVariance(Point point){
-			int tempSize = points.size();
-			double tempVar = variance;
-			tempSize++;
-			tempVar+=(tempSize-1)*pow(getPixelVal(point)-mean,2)/tempSize;
-			return tempVar/tempSize;
+		bool isDistanceOk(Point point, Point neighbor){
+			Vec3b colorP = sourceMatrix.at<Vec3b>(point);
+			Vec3b colorN = sourceMatrix.at<Vec3b>(neighbor);
+			float eucDist = sqrt(pow(colorP[0]-colorN[0],2)+pow(colorP[1]-colorN[1],2)+pow(colorP[2]-colorN[2],2));
+			if(eucDist<eucThreshold)
+				return true;
+			return false;
 		}
 
 		void addPoint(Point newPoint){
 			points.push_front(newPoint);
 			visitedMatrix.at<uchar>(newPoint) = 1;
-			if(points.size() == 1){
-				mean = getPixelVal(newPoint);
-				variance = 0;
-			}else{
-				variance +=(points.size()-1)*pow(getPixelVal(newPoint)-mean,2)/points.size();
-				mean+=(getPixelVal(newPoint)-mean)/points.size();
-			}
 		}
 
 		void grow(){
@@ -85,8 +71,7 @@ class Region{
 						Point neighPoint = Point(curPoint.x+i, curPoint.y+j);
 						if((i|j)!=0 && isInsideRange(neighPoint)){
 							if(visitedMatrix.at<uchar>(neighPoint) == 0){
-								float aftVariance = testVariance(neighPoint);
-								if(aftVariance<varThreshold){
+								if(isDistanceOk(curPoint, neighPoint)){
 									addPoint(neighPoint);
 									processList.push_front(neighPoint);
 								}
@@ -104,8 +89,7 @@ class Region{
 					if((i|j)!=0 && isInsideRange(neighPoint)){
 						if(visitedMatrix.at<uchar>(neighPoint) == 0){
 							//float aftVariance = pushInsideRegion(neighPoint);
-							float aftVariance = testVariance(neighPoint);
-							if(aftVariance<varThreshold){
+							if(isDistanceOk(curPoint, neighPoint)){
 								recursiveGrow(neighPoint);
 							}
 						}
@@ -113,21 +97,34 @@ class Region{
 				}
 			}
 		}
-
-		void color(){
-			int R = (rand()%255)+1;
-			int G = (rand()%255)+1;
-			int B = (rand()%255)+1;
+		
+		Vec3b getMeanColor(){
+			float R, G, B;
+			R = G = B = 0;
 			list<Point>::iterator it;
 			for(it=points.begin(); it!=points.end(); it++){
 				Point point = (*it);
-				outputMatrix.at<Vec3b>(point) = Vec3b(B,G,R);
+				B+=sourceMatrix.at<Vec3b>(point)[0];
+				G+=sourceMatrix.at<Vec3b>(point)[1];
+				R+=sourceMatrix.at<Vec3b>(point)[2];
+			}
+			B = cvRound(B/points.size());
+			G = cvRound(G/points.size());
+			R = cvRound(R/points.size());
+			return Vec3b(B,G,R);
+		}
+
+		void color(){
+			Vec3b color = getMeanColor();
+			list<Point>::iterator it;
+			for(it=points.begin(); it!=points.end(); it++){
+				outputMatrix.at<Vec3b>(*it) = color;
 			}
 		}
 
 };
 
-float Region::varThreshold = 0;
+float Region::eucThreshold = 0;
 Mat Region::sourceMatrix;
 Mat Region::outputMatrix;
 Mat Region::visitedMatrix;
@@ -141,7 +138,7 @@ void regionGrowing(int nSeeds){
 	do{
 		Region newRegion(newSeed);
 		newRegion.grow();
-		if(newRegion.getRegionSize()>10)
+		if(newRegion.getRegionSize()>0)
 			newRegion.color();
 		if(nSeeds>0){
 			newSeed = Point(rand()%Region::sourceMatrix.cols, rand()%Region::sourceMatrix.rows);
@@ -159,7 +156,7 @@ void recursiveRegionGrowing(int nSeeds){
 	do{
 		Region newRegion;
 		newRegion.recursiveGrow(newSeed);
-		if(newRegion.getRegionSize()>10)
+		if(newRegion.getRegionSize()>0)
 			newRegion.color();
 		if(nSeeds>0){
 			newSeed = Point(rand()%Region::sourceMatrix.cols, rand()%Region::sourceMatrix.rows);
@@ -167,21 +164,6 @@ void recursiveRegionGrowing(int nSeeds){
 		}else
 			minMaxLoc(Region::visitedMatrix, &minVal, nullptr, &newSeed, nullptr);
 	}while(minVal==0);
-	imwrite("region.png", Region::outputMatrix);
-}
-
-/*Region Growing with a scan: I must specify the number of seeds per row*/
-void regionGrowingScan(int nSeeds, int padFromEdges){
-	int spaceX = cvRound((Region::sourceMatrix.cols-padFromEdges)/nSeeds);
-	int spaceY = cvRound((Region::sourceMatrix.rows-padFromEdges)/nSeeds);
-	for(int col=spaceY; col<=Region::sourceMatrix.rows-padFromEdges; col=col+spaceY){
-		for(int i=1; i<=nSeeds; i++){
-			Region newRegion(Point(i*spaceX,col));
-			newRegion.grow();
-			if(newRegion.getRegionSize()>10)
-				newRegion.color();				
-		}
-	}
 	imwrite("region.png", Region::outputMatrix);
 }
 
@@ -202,9 +184,8 @@ int main(int argc, char** argv) {
 	namedWindow("source", WINDOW_AUTOSIZE);
 	imshow("source", Region::sourceMatrix);
 	waitKey(0);
-	recursiveRegionGrowing(10);
-	//regionGrowing(10);
-	//regionGrowingScan(4,15);		// #seeds, spacing ai lati (utile per spaziare i seed dai margini)
-	
+	//recursiveRegionGrowing(10);
+	regionGrowing(10);
+
 	return 0;
 }

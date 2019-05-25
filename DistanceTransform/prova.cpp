@@ -36,10 +36,10 @@ class DistanceTransform{
 					int actualPixelValue = outputMatrix.at<uchar>(row,col);
 					if(actualPixelValue!=0){
 						uchar minVal = UCHAR_MAX;
-						for(int i=-1; i<=1; i++)
+						for(int i=-1; i<=1; i++) //controllo il minimo della riga superiore
 							if(outputMatrix.at<uchar>(row-1,col+i)<minVal)
 								minVal = outputMatrix.at<uchar>(row-1,col+i);
-						if(outputMatrix.at<uchar>(row,col-1)<minVal)
+						if(outputMatrix.at<uchar>(row,col-1)<minVal) //controllo se il pixel alla sinistra del pixel considerato è minimo
 							minVal = outputMatrix.at<uchar>(row,col-1);
 						outputMatrix.at<uchar>(row,col) = min(minVal+1,255);
 					}
@@ -52,9 +52,9 @@ class DistanceTransform{
 					if(actualPixelValue!=0){
 					uchar minVal = UCHAR_MAX;
 						for(int i=-1; i<=1; i++)
-							if(outputMatrix.at<uchar>(row+1,col+i)<minVal)
+							if(outputMatrix.at<uchar>(row+1,col+i)<minVal)//controllo il minimo della riga inferiore
 								minVal = outputMatrix.at<uchar>(row+1,col+i);
-						if(outputMatrix.at<uchar>(row,col+1)<minVal)
+						if(outputMatrix.at<uchar>(row,col+1)<minVal)//controllo se il pixel alla destra del pixel considerato è minimo
 							minVal = outputMatrix.at<uchar>(row,col+1);
 						outputMatrix.at<uchar>(row,col) = min(min(minVal+1, actualPixelValue),255);
 					}

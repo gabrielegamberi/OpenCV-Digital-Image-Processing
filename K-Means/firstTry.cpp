@@ -24,7 +24,6 @@ class Cluster{
 
         Cluster(){
             centroid={0,0,0};
-            
         }
         ~Cluster(){}
 
@@ -34,7 +33,7 @@ class Cluster{
                 cout<<"--Error -- No image data"<<endl;
                 exit(EXIT_FAILURE);
             }
-
+            resize(rawImage,rawImage,Size(200,200));
             namedWindow("rawImage", WINDOW_AUTOSIZE);
             imshow("rawImage", rawImage);
             waitKey(0);
@@ -57,7 +56,7 @@ class Cluster{
         bool hasSimilarCentroidTo(vector<float> otherCentroid){
             float cWeight = centroid.at(0)+centroid.at(1)+centroid.at(2);
             float oWeight = otherCentroid.at(0)+otherCentroid.at(1)+otherCentroid.at(2);
-            float threshold = 10;
+            float threshold = 1;
            if(abs(cWeight-oWeight)<threshold)
                 return true;
             return false;
@@ -65,6 +64,7 @@ class Cluster{
 
         void calcCentroid(){
             if(pixels.size()!=0){
+                centroid = {0,0,0};
                 vector<Point>::iterator p;
                 for(p=pixels.begin(); p!=pixels.end(); p++){
                     centroid.at(0)+=getPixelVal(*p, 0);
@@ -99,9 +99,9 @@ class Cluster{
         }
         
         void color(Mat& inoutMatrix){
-			int R = (rand()%255)+1;
-			int G = (rand()%255)+1;
-			int B = (rand()%255)+1;
+			int R = centroid.at(2); //(rand()%255)+1;
+			int G = centroid.at(1);//(rand()%255)+1;
+			int B = centroid.at(0); //(rand()%255)+1;
 			vector<Point>::iterator it;
 			for(it=pixels.begin(); it!=pixels.end(); it++){
 				Point pixel = (*it);

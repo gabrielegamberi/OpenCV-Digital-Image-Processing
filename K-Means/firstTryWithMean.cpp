@@ -34,7 +34,7 @@ class Cluster{
                 cout<<"--Error -- No image data"<<endl;
                 exit(EXIT_FAILURE);
             }
-
+            resize(rawImage,rawImage,Size(200,200));
             namedWindow("rawImage", WINDOW_AUTOSIZE);
             imshow("rawImage", rawImage);
             waitKey(0);

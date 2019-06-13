@@ -136,8 +136,8 @@ void sobel(const Mat inputMatrix, Mat& sobelGx, Mat& sobelGy, Mat& sobelMag, Mat
 			yGrad = xGrad = 0;
 			for(int i=-SOBEL_PAD; i<=SOBEL_PAD; i++){
 				for(int j=-SOBEL_PAD; j<=SOBEL_PAD; j++){
-					yGrad+=(int)(paddedMatrix.at<uchar>(row+i,col+j)*vertSobel.at<char>(i+SOBEL_PAD,j+SOBEL_PAD));
-					xGrad+=(int)(paddedMatrix.at<uchar>(row+i,col+j)*horSobel.at<char>(i+SOBEL_PAD,j+SOBEL_PAD));
+					yGrad+=(int)(paddedMatrix.at<uchar>(row+i,col+j)*horSobel.at<char>(i+SOBEL_PAD,j+SOBEL_PAD));
+					xGrad+=(int)(paddedMatrix.at<uchar>(row+i,col+j)*vertSobel.at<char>(i+SOBEL_PAD,j+SOBEL_PAD));
 				}
 			}
 
@@ -171,18 +171,18 @@ void nonMaximaSuppression(Mat& trueEdges, const Mat sobelMag, const Mat orMatrix
 			currentPixel = sobelMag.at<float>(row,col);
 			int edgeDirection = orMatrix.at<float>(row,col);
 			int neighborPix1, neighborPix2;
-			if(edgeDirection == vertical){ //orientazione edge verticale -> prendo i pixel ortogonali (dir. del gradiente = orizzontale)
-				neighborPix1 = sobelMag.at<float>(row,col-1);
-				neighborPix2 = sobelMag.at<float>(row,col+1);
-			}else if(edgeDirection == pDiagonal){ //diagonale a 45°
-				neighborPix1 = sobelMag.at<float>(row-1,col-1);
-				neighborPix2 = sobelMag.at<float>(row+1,col+1);
-			}else if(edgeDirection == horizontal){ //orizzontale
+			if(edgeDirection == vertical){ //orientazione edge verticale
 				neighborPix1 = sobelMag.at<float>(row-1,col);
 				neighborPix2 = sobelMag.at<float>(row+1,col);
-			}else{									//diagonale a -45°
+			}else if(edgeDirection == pDiagonal){ //diagonale a 45°
 				neighborPix1 = sobelMag.at<float>(row+1,col-1);
 				neighborPix2 = sobelMag.at<float>(row-1,col+1);
+			}else if(edgeDirection == horizontal){ //orizzontale
+				neighborPix1 = sobelMag.at<float>(row,col-1);
+				neighborPix2 = sobelMag.at<float>(row,col+1);
+			}else{									//diagonale a -45°
+				neighborPix1 = sobelMag.at<float>(row-1,col-1);
+				neighborPix2 = sobelMag.at<float>(row+1,col+1);
 			}
 			currentPixel = (currentPixel<max(neighborPix1,neighborPix2))? 0:currentPixel;	//non maxima suppression
 			trueEdges.at<float>(row,col) = currentPixel; //(currentPixel>maxVal)? currentPixel:0; 
@@ -292,7 +292,7 @@ int main(int argc, char** argv )
 	}
 	namedWindow("input", WINDOW_AUTOSIZE);
 	imshow("input", inputMatrix);
-
+	
 	int threshold;
   	createTrackbar("Min Threshold:", "input", &threshold, 255, invokeMinCanny);
 	createTrackbar("Max Threshold:", "input", &threshold, 255, invokeMaxCanny);
@@ -315,69 +315,205 @@ int main(int argc, char** argv )
   
 
 /*
-#include "opencv2/imgproc/imgproc.hpp"
-#include "opencv2/highgui/highgui.hpp"
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 
+#include <stdio.h>
+#include <iostream>
+#include <opencv2/opencv.hpp>
+#include <string>
+#include <math.h>
+using namespace std;
 using namespace cv;
 
-/// Global variables
+#define KERNEL_SIZE 3
+#define PAD 1
 
-Mat src, src_gray;
-Mat dst, detected_edges;
+int N, M;
+int maxThreshold, minThreshold;
+Mat paddedMatrix;
 
-int edgeThresh = 1;
-int lowThreshold;
-int const max_lowThreshold = 100;
-int ratio = 3;
-int kernel_size = 3;
-String window_name = "Edge Map";
+Mat horSobel = (Mat_<char>(KERNEL_SIZE, KERNEL_SIZE)<<-1,-2,-1,
+													   0, 0, 0,
+													   1, 2, 1
+);
+
+Mat vertSobel = (Mat_<char>(KERNEL_SIZE, KERNEL_SIZE)<<-1, 0, 1,
+													   -2, 0, 2,
+													   -1, 0, 1
+);
+
+enum direction{horizontal=1, vertical, pDiagonal, nDiagonal};
+
+void showNormalizedMatrix(String title, const Mat matrix){
+	Mat normalizedMatrix;
+	normalize(matrix, normalizedMatrix, 0, 255, NORM_MINMAX, CV_8UC1);
+	namedWindow(title, WINDOW_AUTOSIZE);
+	imshow(title, normalizedMatrix);
+}
+
+void sobel(Mat& paddedMatrix, Mat& sobelX, Mat& sobelY, Mat& magnitude, Mat& orientation){
+	int xGrad, yGrad;
+	for(int row=PAD; row<N-PAD; row++){
+		for(int col=PAD; col<M-PAD; col++){
+			xGrad = yGrad = 0;
+			for(int i=-PAD; i<=PAD; i++){
+				for(int j=-PAD; j<=PAD; j++){
+					xGrad+=paddedMatrix.at<uchar>(row+i, col+j)*vertSobel.at<char>(i+PAD, j+PAD);
+					yGrad+=paddedMatrix.at<uchar>(row+i, col+j)*horSobel.at<char>(i+PAD, j+PAD);
+				}
+			}
+			sobelX.at<float>(row,col) = abs(xGrad);
+			sobelY.at<float>(row,col) = abs(yGrad);
+
+			float orientationValue = atan2(xGrad, yGrad)*180/CV_PI;
+			orientationValue = (orientationValue<0)? orientationValue+180:orientationValue;
+
+			if(orientationValue>=22.5 && orientationValue<=67.5)
+				orientationValue = pDiagonal;
+			else if(orientationValue>67.5 && orientationValue<=112.5)
+				orientationValue = horizontal;
+			else if(orientationValue>112.5 && orientationValue<=157.5)
+				orientationValue = nDiagonal;
+			else
+				orientationValue = vertical;
+
+			orientation.at<uchar>(row,col) = orientationValue;
+			magnitude.at<float>(row,col) = sqrt(pow(sobelX.at<float>(row,col),2)+pow(sobelY.at<float>(row,col),2));
+
+		}	
+	}	
+}
 
 
-void CannyThreshold(int, void*)
-{
-  /// Reduce noise with a kernel 3x3
-  blur( src_gray, detected_edges, Size(3,3) );
+void nonMaximaSuppression(Mat& trueEdges, const Mat magnitude, const Mat orientation){
+	float currMagnitude;
+	for(int row=PAD; row<N-PAD; row++){
+		for(int col=PAD; col<M-PAD; col++){
+			currMagnitude = magnitude.at<float>(row,col);
+			int edgeDirection = orientation.at<uchar>(row,col);
+			float neighborMag1, neighborMag2;
+			if(edgeDirection==horizontal){
+				neighborMag1 = magnitude.at<float>(row,col-1);
+				neighborMag2 = magnitude.at<float>(row,col+1);
+			}else if(edgeDirection==vertical){
+				neighborMag1 = magnitude.at<float>(row-1,col);
+				neighborMag2 = magnitude.at<float>(row+1,col);
+			}else if(edgeDirection==pDiagonal){
+				neighborMag1 = magnitude.at<float>(row-1,col+1);
+				neighborMag2 = magnitude.at<float>(row+1,col-1);
+			}else{
+				neighborMag1 = magnitude.at<float>(row-1,col-1);
+				neighborMag2 = magnitude.at<float>(row+1,col+1);
+			}
+			currMagnitude = (currMagnitude<max(neighborMag1,neighborMag2))? 0:currMagnitude;
+			trueEdges.at<float>(row,col) = currMagnitude;
+		}	
+	}
+}
+void isteresis(Mat& trueEdges, Mat& almostEdges, Mat& finalEdges){
+	finalEdges = Mat::zeros(trueEdges.size(), CV_8UC1);
+	float currentPixelVal;
+	for(int row=PAD; row<N-PAD; row++){
+		for(int col=PAD; col<M-PAD; col++){
+			currentPixelVal = trueEdges.at<float>(row,col);
+			trueEdges.at<float>(row,col) = (currentPixelVal>=maxThreshold)? currentPixelVal:0;
+			almostEdges.at<float>(row,col) = (currentPixelVal>=minThreshold && currentPixelVal<maxThreshold)? currentPixelVal:0;
+			finalEdges.at<uchar>(row,col) = (trueEdges.at<float>(row,col)!=0)? 255:0;
+		}
+	}
+	for(int row=PAD; row<N-PAD; row++){
+		for(int col=PAD; col<M-PAD; col++){
+			currentPixelVal = trueEdges.at<float>(row,col);
+			if(currentPixelVal>0){
+				for(int i=-PAD; i<=PAD; i++){
+					for(int j=-PAD; j<=PAD; j++){
+						float neighborPixelVal = almostEdges.at<float>(row+i,col+j);
+						if((i|j)!=0 && neighborPixelVal>0){
+							trueEdges.at<float>(row+i,col+j) = neighborPixelVal;
+							finalEdges.at<uchar>(row+i,col+j) = 255;
+						}
+					}
+				}
+			}
+		}
+	}
+}
 
-  /// Canny detector
-  Canny( detected_edges, detected_edges, lowThreshold, lowThreshold*ratio, kernel_size );
+void CannyEdgeDetection(const Mat paddedMatrix){
+	Mat blurredMatrix, sobelX, sobelY, magnitude, orientation;
+	GaussianBlur(paddedMatrix, blurredMatrix, Size(3,3), 1.4);
+	
+	sobelX = Mat(blurredMatrix.size(), CV_32FC1);
+	sobelY = Mat(blurredMatrix.size(), CV_32FC1);
+	magnitude = Mat(blurredMatrix.size(), CV_32FC1);
+	orientation = Mat(blurredMatrix.size(), CV_8UC1);
 
-  /// Using Canny's output as a mask, we display our result
-  dst = Scalar::all(0);
-
-  src.copyTo( dst, detected_edges);
-  imshow( window_name, dst );
- }
 
 
-int main( int argc, char** argv )
-{
-  /// Load an image
-  src = imread( "./lena.jpg" );
+	sobel(blurredMatrix, sobelX, sobelY, magnitude, orientation);
 
-  if( !src.data )
-  { return -1; }
+	Mat trueEdges, almostEdges, finalEdges;
+	trueEdges = Mat::zeros(paddedMatrix.size(), CV_32FC1);
+	almostEdges = Mat::zeros(paddedMatrix.size(), CV_32FC1);
 
-  /// Create a matrix of the same type and size as src (for dst)
-  dst.create( src.size(), src.type() );
+	nonMaximaSuppression(trueEdges, magnitude, orientation);
 
-  /// Convert the image to grayscale
-  cvtColor( src, src_gray, CV_BGR2GRAY );
+	isteresis(trueEdges, almostEdges, finalEdges);
 
-  /// Create a window
-  namedWindow( window_name, CV_WINDOW_AUTOSIZE );
+	showNormalizedMatrix("sobelX", sobelX);
+	showNormalizedMatrix("sobelY", sobelY);
+	showNormalizedMatrix("magnitude", magnitude);
+	showNormalizedMatrix("true edges", trueEdges);
+	showNormalizedMatrix("Final Edges", finalEdges);
+	
+}
 
-  /// Create a Trackbar for user to enter threshold
-  createTrackbar( "Min Threshold:", window_name, &lowThreshold, max_lowThreshold, CannyThreshold );
+void invokeMinCanny(int newMinThreshold, void*){
+	minThreshold = newMinThreshold;
+	CannyEdgeDetection(paddedMatrix);
+}
+void invokeMaxCanny(int newMaxThreshold, void*){
+	maxThreshold = newMaxThreshold;
+	CannyEdgeDetection(paddedMatrix);
+}
 
-  /// Show the image
-  CannyThreshold(0, 0);
+int main(int argc, char** argv ){
+	if(argc!=4){
+		cerr<<"--- ERROR --- current usage: <exe> <file.ext> <minThreshold> <maxThreshold>"<<endl;
+		exit(EXIT_FAILURE);
+	}
+   	const char* fileName = argv[1];
+	Mat sourceMatrix = imread(fileName, IMREAD_GRAYSCALE);
+	if(sourceMatrix.empty()){
+		cerr<<"-- Matrix is empty --"<<endl;
+		exit(EXIT_FAILURE);
+	}
+	namedWindow("input", WINDOW_AUTOSIZE);
+	imshow("input", sourceMatrix);
+	
+	paddedMatrix = Mat::zeros(sourceMatrix.rows+2*PAD, sourceMatrix.cols+2*PAD, sourceMatrix.type());
+	for(int i=PAD; i<paddedMatrix.rows-PAD; i++)
+		for(int j=PAD; j<paddedMatrix.cols-PAD; j++)
+			paddedMatrix.at<uchar>(i,j) = sourceMatrix.at<uchar>(i-PAD,j-PAD);
+	
+	N = paddedMatrix.rows;
+	M = paddedMatrix.cols;
+	minThreshold = atoi(argv[2]);
+	maxThreshold = atoi(argv[3]);
 
-  /// Wait until user exit program by pressing a key
-  waitKey(0);
+	namedWindow("input", WINDOW_AUTOSIZE);
+	imshow("input", sourceMatrix);
+	
+	int thresholdPassed;
+	createTrackbar("Min Threshold", "input", &thresholdPassed, 255, invokeMinCanny);
+	createTrackbar("Max Threshold", "input", &thresholdPassed, 255, invokeMaxCanny);
+	waitKey(0);
+	//CannyEdgeDetection(paddedMatrix);
+	//Mat noPaddedMatrix;
+	//paddedMatrix(Rect(Point(PAD, paddedMatrix.cols-PAD), Point(paddedMatrix.rows-PAD, PAD))).copyTo(noPaddedMatrix);
+	//namedWindow("output", WINDOW_AUTOSIZE);
+	//imshow("output", noPaddedMatrix);
+	
+	return 0;
+}
 
-  return 0;
-  }
-  */
+*/

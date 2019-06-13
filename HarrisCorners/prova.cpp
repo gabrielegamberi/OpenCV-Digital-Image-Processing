@@ -83,7 +83,7 @@ float getEigenValue(int row, int col, const Mat& sobelX, const Mat& sobelY, int 
 
 void suppressCorners(list<Pixel> corners, Mat& resultMatrix){
 	list<Pixel>::iterator it, it2;
-	int neighborhood = 15;
+	int neighborhood = 20;
 	int pad = floor(neighborhood/2);
 	float limit = sqrt(pow(pad,2)+pow(pad,2));
 	corners.sort();

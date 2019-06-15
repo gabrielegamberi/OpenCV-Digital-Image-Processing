@@ -1,218 +1,227 @@
-
 #include <stdio.h>
 #include <iostream>
-#include <vector>
-#include <numeric>
-#include <math.h>
-#include <opencv2/opencv.hpp>
 #include <string>
-#include <stdlib.h>
-#include <time.h>  
+#include <math.h>
+#include <time.h>
+#include <opencv2/opencv.hpp>
 
-using namespace cv;
 using namespace std;
-
-Size previousSize;
+using namespace cv;
 
 class Cluster{
-    public:
-        vector<Point> pixels;
-        Vec3b centroid;
-        pair<Point, float> maxPoint;
-        vector<float> distFromDataset;
+	public:
+		static Size backupSize;
+		static Mat sourceMatrix;
+		static vector<Point> dataSet;
+		vector<Point> points;
+		pair<Point, float> maxPoint;
+		Vec3b centroid;
+		vector<float> distancesFromCentroid;
+		
+		Cluster(){centroid = Vec3b(0,0,0);}
+		Cluster(Point point){centroid = getPixelValue(point);}
 
-        static Mat rawImage;
-        static vector<Point> dataSet;
+		inline static Vec3b getPixelValue(Point point){return sourceMatrix.at<Vec3b>(point);}
 
-        Cluster(){
-            centroid = Vec3b(0,0,0);
-        }
-        Cluster(Point point){
-            centroid = getPixelVal(point);
-        }
-        ~Cluster(){}
-
-        static void init(const char *fileName){
-            rawImage = imread(fileName, IMREAD_COLOR);//immagine presa in input
-            if (rawImage.empty()){
-                cout<<"--Error -- No image data"<<endl;
-                exit(EXIT_FAILURE);
-            }
-            previousSize = rawImage.size();
-	        cv::resize(rawImage, rawImage, cv::Size(100,100));
-            
-            for(int y=0; y<rawImage.rows; y++)
-                for(int x=0; x<rawImage.cols; x++)
-                    dataSet.push_back(Point(x,y));
-        }
-
-
-        static float euclideanDistance(Vec3b c1, Vec3b c2){
-            return (pow(c1[0]-c2[0],2)+pow(c1[1]-c2[1],2)+pow(c1[2]-c2[2],2));
-        }
-
-        
-        static Vec3b getPixelVal(Point point){
-			return rawImage.at<Vec3b>(point);
+		static float euclideanDistance(Vec3b color1, Vec3b color2){
+			return pow(color1[0]-color2[0],2)+pow(color1[1]-color2[1],2)+pow(color1[2]-color2[2],2);
 		}
 
-        static void pick2MaxPoints(Point& Y, Point& Z){
-            int N = rawImage.rows;
-            int M = rawImage.cols;
-            float valMax = 0;
-            for(int i=0; i<N*M; i++){
-                for(int j=i+1; j<N*M; j++){
-                    float distance = Cluster::euclideanDistance(Cluster::getPixelVal(dataSet.at(i)),Cluster::getPixelVal(dataSet.at(j)));
-                    if(distance>valMax){
-                        valMax = distance;
-                        Y = dataSet.at(i);
-                        Z = dataSet.at(j);
-                    }
-                }
-            }
-        }
-
-        void insertData(int i){pixels.push_back(dataSet.at(i));}
-        void clearData(){pixels.clear();}
-
-        void calcCentroid(){
-            if(pixels.size()!=0){
-                float meanR, meanG, meanB;
-                meanR = meanG = meanB = 0;
-                vector<Point>::iterator p;
-                for(p=pixels.begin(); p!=pixels.end(); p++){
-                    Vec3b color = getPixelVal(*p);
-                    meanB+=color[0];
-                    meanG+=color[1];
-                    meanR+=color[2];
-                }
-                meanB/=pixels.size();
-                meanG/=pixels.size();
-                meanR/=pixels.size();
-                centroid = Vec3b(meanB,meanG,meanR);
-            }
-        }
-
-        void calcMostDistantPoint(){
-            float maxDist, distance;
-            maxDist = 0;
-            for(int i=0; i<pixels.size(); i++){
-                distance = euclideanDistance(centroid,getPixelVal(pixels.at(i)));
-                if(distance>maxDist){
-                    maxDist = distance;
-                    maxPoint = make_pair(pixels.at(i),maxDist);
-                }
-            }
-        }
-
-        void calcDistanceFromDataset(){
-            distFromDataset.clear();
-            for(int j=0; j<dataSet.size(); j++)
-                distFromDataset.push_back(euclideanDistance(centroid,getPixelVal(dataSet.at(j))));
-        }
-        
-        void color(Mat& inoutMatrix){
-			vector<Point>::iterator it;
-			for(it=pixels.begin(); it!=pixels.end(); it++){
-				Point pixel = (*it);
-				inoutMatrix.at<Vec3b>(pixel) = centroid;
+		static void pick2MaxPoints(Point& Y, Point& Z){
+			int N = sourceMatrix.rows;
+			int M = sourceMatrix.cols;
+			float valMax = 0;
+			for(int i=0; i<dataSet.size(); i++){
+				for(int j=i+1; j<dataSet.size(); j++){
+					float distance = euclideanDistance(getPixelValue(dataSet.at(i)), getPixelValue(dataSet.at(j)));
+					if(distance>valMax){
+						valMax = distance;
+						Y = dataSet.at(i);
+						Z = dataSet.at(j);
+					}
+				}
 			}
+			
+		}
+
+		static void restorePictureSize(){
+			resize(Cluster::sourceMatrix,Cluster::sourceMatrix,backupSize);
+			dataSet.clear();
+			fillDataset();
+		}
+		
+		static void fillDataset(){
+			for(int y=0; y<sourceMatrix.rows; y++)
+                for(int x=0; x<sourceMatrix.cols; x++)
+                    dataSet.push_back(Point(x,y));
+		}
+
+		static void init(String fileName){
+			sourceMatrix = imread(fileName, IMREAD_COLOR);
+			if(sourceMatrix.empty()){
+				cerr<<"--- ERROR --- matrix is empty!"<<endl;
+				exit(EXIT_FAILURE);
+			}
+			backupSize = sourceMatrix.size();
+			resize(Cluster::sourceMatrix,Cluster::sourceMatrix,Size(100,100));
+			
+			fillDataset();
+
+			namedWindow("sourceMatrix", WINDOW_AUTOSIZE);
+			imshow("sourceMatrix", sourceMatrix);
+		}
+
+		void clearPoints(){points.clear();}
+
+		void calcDistancesFromOwnCentroid(){
+			distancesFromCentroid.clear();
+			for(int i=0; i<dataSet.size(); i++)
+				distancesFromCentroid.push_back(euclideanDistance(centroid, getPixelValue(dataSet.at(i))));
+		}
+
+		void insertPoint(Point newPoint){
+			points.push_back(newPoint);
+		}
+		inline int getSize(){points.size();}
+
+		void calcMostDistantPoint(){
+			float maxDistance, distance;
+			maxDistance = 0;
+			for(int i=0; i<points.size(); i++){
+				distance = euclideanDistance(centroid, getPixelValue(points.at(i)));
+				if(distance>maxDistance){
+					maxDistance = distance;
+					maxPoint = make_pair(points.at(i), maxDistance);
+				}
+			}
+		}
+
+		void calcCentroid(){
+			if(points.size()>0){
+				float meanR, meanG, meanB;
+				meanR = meanG = meanB = 0;
+				for(int i=0; i<points.size(); i++){
+					Vec3b color = getPixelValue(points.at(i));
+					meanB+=color[0];
+					meanG+=color[1];
+					meanR+=color[2];
+				}
+				meanB/=points.size();
+				meanG/=points.size();
+				meanR/=points.size();
+				centroid = Vec3b(meanB, meanG, meanR);
+			}
+		}
+
+		void color(Mat &outputMatrix){
+			for(int i=0; i<points.size(); i++)
+				outputMatrix.at<Vec3b>(points.at(i)) = centroid;
 		}
 };
 
-Mat Cluster::rawImage;
+Mat Cluster::sourceMatrix;
+Size Cluster::backupSize;
 vector<Point> Cluster::dataSet;
 
 
 void MengHeeHang(){
-    Point y,z;
-    vector<Cluster> clusters, newClusters;
-    vector<Cluster>::iterator c,c2;
-    bool haveNewCluster;
+	vector<Cluster> clusters;
+	vector<Cluster>::iterator c;
+	Point Y,Z;
 
-    Cluster::pick2MaxPoints(y,z);
-    clusters.push_back(Cluster(y));
-    clusters.push_back(Cluster(z));
+	Cluster::pick2MaxPoints(Y,Z);
+	clusters.push_back(Cluster(Y));
+	clusters.push_back(Cluster(Z));
+	cout<<"--- Max point calculated (chromatically speaking)---"<<endl;
+	cout<<"Y ("<<Y.y<<","<<Y.x<<")\t|\tZ ("<<Z.y<<","<<Z.x<<")"<<endl;
 
-    do{
-        haveNewCluster = false;
+	Cluster::restorePictureSize();
+	cout<<"--- Image resized back to "<<Cluster::backupSize<<" ---"<<endl;
+	
+	cout<<"--- Processing ---"<<endl;
+	int iteration = 0;
+	bool haveNewCluster;
+	do{
+		cout<<"- Iteration #"<<(++iteration)<<endl;
+		haveNewCluster = false;
+		//per ogni cluster: resetta i punti e calcola la distanza di ogni pixel del dataset dal rispettivo centroide 
+		for(c=clusters.begin(); c!=clusters.end(); c++){
+			(*c).clearPoints();
+			(*c).calcDistancesFromOwnCentroid();
+		}
 
-        for(c=clusters.begin(); c!=clusters.end(); c++){
-            (*c).clearData();                   //rimuovi i pixel dal cluster (il centroide rimane)
-            (*c).calcDistanceFromDataset();     //calcola la distanza di tutti i punti dal centroide (i punti sono appartenenti al dataset)
-        }
+		//determina il cluster a distanza minima
+		for(int i=0; i<Cluster::dataSet.size(); i++){
+			int iMinDistance;
+			float minDistance = FLT_MAX;
+			for(int k=0; k<clusters.size(); k++){
+				Cluster& current = clusters.at(k);
+				if(current.distancesFromCentroid.at(i)<minDistance){
+					minDistance = current.distancesFromCentroid.at(i);
+					iMinDistance = k;
+				}
+			}
+			clusters.at(iMinDistance).insertPoint(Cluster::dataSet.at(i));
+		}
 
-        //per ogni elemento del dataset (pixel) trova il centroide del cluster a distanza minima
-        for(int i=0; i<Cluster::dataSet.size(); i++){ 
-            float minIndex;
-            float minDistance = FLT_MAX;
-            for(int k=0; k<clusters.size(); k++){
-                if(clusters.at(k).distFromDataset.at(i) < minDistance){
-                    minDistance = clusters.at(k).distFromDataset.at(i);
-                    minIndex = k;
-                }
-            }
-            //inserisci il pixel all'interno del cluster a distanza minima
-            clusters.at(minIndex).insertData(i);
-        }
+		//per ogni cluster ricalcola il centroide
+		for(c=clusters.begin(); c!=clusters.end();){
+			Cluster& cluster = (*c);
+			if(cluster.getSize()==0){
+				c = clusters.erase(c);
+			}else{
+				cluster.calcCentroid();
+				cluster.calcMostDistantPoint();
+				++c;
+			}
+		}
 
-        //per ogni cluster, ricalcola il centroide e il pixel X a distanza massima D
-        for(c=clusters.begin(); c!=clusters.end();){
-            if((*c).pixels.size() == 0){ //se dopo l'assegnazione dei pixel ai cluster, un cluster è vuoto, allora eliminalo
-                c = clusters.erase(c);
-            }else{
-                (*c).calcCentroid();
-                (*c).calcMostDistantPoint(); 
-                ++c;
-            }
-        }
-        
-        float q, numCouples;
-        q = numCouples = 0;
-        for(int i=0; i<clusters.size(); i++){
-            for(int j=i+1; j<clusters.size(); j++){
-                q+=Cluster::euclideanDistance(clusters.at(i).centroid, clusters.at(j).centroid);
-                numCouples++;
-            }
-        }
-        q/=numCouples;
+		//calcolati la distanza media "q" tra i centroidi (somma le distanza tra ogni coppia di centroidi e fai la media)
+		float q, numCouples;
+		q = numCouples = 0;
+		for(int i=0; i<clusters.size(); i++){
+			for(int j=i+1; j<clusters.size(); j++){
+				q+=Cluster::euclideanDistance(clusters.at(i).centroid, clusters.at(j).centroid);
+				numCouples++;
+			}
+		}
+		q/=numCouples;
+		
+		//prendi il punto che si trova a massima distanza dal proprio centroide (X: MASSIMO DEI MASSIMI)
+		Point X;
+		float d = 0;
+		for(c=clusters.begin(); c!=clusters.end(); c++){
+			float currentDistance = (*c).maxPoint.second; //prendi la distanza del punto massimo
+			if(currentDistance > d){
+				d = currentDistance;
+				X = (*c).maxPoint.first; 			//prendi il punto massimo
+			}
+		}	
 
-        //prendi il punto a massima distanza dai punti a più massima distanza dal proprio centroide
-        Point mostDistantPoint;
-        float d = 0;
-        for(c=clusters.begin(); c!=clusters.end(); c++){
-            float currDistance = (*c).maxPoint.second;
-            if(currDistance>d){
-                mostDistantPoint = (*c).maxPoint.first;
-                d = currDistance;
-            }
-        }
-        if(d>q/2){   
-            clusters.push_back(Cluster(mostDistantPoint));
-            haveNewCluster = true;
-        }
-    }while(haveNewCluster);
-    
-    Mat outputMatrix = Mat::zeros(Cluster::rawImage.size(),Cluster::rawImage.type());
-    for(c=clusters.begin(); c!=clusters.end(); c++)
-        (*c).color(outputMatrix);
+		//se viene rispettata questa condizione, allora X sarà messo in un nuovo cluster
+		if(d>q/2){
+			clusters.push_back(Cluster(X));
+			haveNewCluster = true;
+		}
+	}while(haveNewCluster);
 
-	cv::resize(outputMatrix, outputMatrix, cv::Size(previousSize));
-    imwrite("clusterized.png", outputMatrix);
+	Mat outputMatrix = Mat::zeros(Cluster::sourceMatrix.size(), Cluster::sourceMatrix.type());
+	for(c=clusters.begin(); c!=clusters.end(); c++)
+		(*c).color(outputMatrix);
+
+	imwrite("clusterized.png", outputMatrix);
 }
 
-
-
-
-int main(int argc, char** argv )
-{
-    if(argc!=2){
-        cerr<<"-- Error -- Usage <program> <image.ext>"<<endl;
-        exit(EXIT_FAILURE);
-    }
-
-    Cluster::init(argv[1]);
-    MengHeeHang();
-
-    return 0;
+int main(int argc, char** argv ){
+	if(argc!=2){
+		cerr<<"--- ERROR --- required <executable> <filename.ext>"<<endl;
+		exit(EXIT_FAILURE);
+	}	
+	Cluster::init(argv[1]);
+	MengHeeHang();
+	//Mat sourceMatrix = imread(argv[1], IMREAD_COLOR);
+	//namedWindow("sourceMatrix", WINDOW_AUTOSIZE);
+	//imshow("sourceMatrix", sourceMatrix);
+	waitKey(0);
+	return 0;
 }

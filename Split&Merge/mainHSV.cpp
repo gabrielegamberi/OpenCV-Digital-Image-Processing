@@ -1,5 +1,194 @@
 #include <stdio.h>
 #include <iostream>
+#include <string>
+#include <math.h>
+#include <time.h>
+#include <opencv2/opencv.hpp>
+
+using namespace std;
+using namespace cv;
+
+#define VARIANCE_THRESHOLD 150
+#define AREA_THRESHOLD 10*10
+
+enum direction{TOP, RIGHT, DOWN, LEFT};
+
+Mat sourceMatrix, HSVMatrix, outputBGR;
+
+class Region{
+	public:
+		Rect square;
+		float meanH;
+		float varH;
+		set<Region*> adj;
+		static vector<Region> regions;
+
+
+		Region(Point corner1, Point corner2){
+			square = Rect(corner1, corner2);
+			calcMean();
+			calcVar();
+		}
+
+		void calcMean(){
+			meanH = 0;
+			int rowStart = square.y;
+			int rowEnd = square.y + square.height;
+			int colStart = square.x;
+			int colEnd = square.x + square.width;
+		
+			for(int row=rowStart; row<=rowEnd; row++)
+				for(int col=colStart; col<=colEnd; col++)
+					meanH+=HSVMatrix.at<Vec3b>(row, col)[0];
+
+			meanH/=((square.height+1)*(square.width+1));
+		}
+
+		void calcVar(){
+			varH = 0;
+			int rowStart = square.y;
+			int rowEnd = square.y + square.height;
+			int colStart = square.x;
+			int colEnd = square.x + square.width;
+		
+			for(int row=rowStart; row<=rowEnd; row++)
+				for(int col=colStart; col<=colEnd; col++)
+					varH+=pow(HSVMatrix.at<Vec3b>(row,col)[0]-meanH,2);
+			varH/=((square.height+1)*(square.width+1));
+		}
+
+		bool isUniform(){
+			if(varH<=VARIANCE_THRESHOLD)
+				return true;
+			return false;
+		}
+
+		static Point getMidPoint(const Region region, enum direction side){
+			int midX, midY;
+			if(side==TOP){
+				midX = region.square.x+(region.square.x+region.square.width)/2;
+				midY = region.square.y-2;
+			}else if(side==RIGHT){
+				midX = region.square.x+2;
+            	midY = (region.square.y+(region.square.y+region.square.height))/2;
+			}else if(side==DOWN){
+				midX = region.square.x+(region.square.x+region.square.width)/2;
+				midY = region.square.y+2;
+			}else{
+				midX = region.square.x-2;
+				midY = (region.square.y+(region.square.y+region.square.height))/2;
+			}
+			return Point(midX, midY);
+		}
+
+		static void mapAdjacents(){
+			for(int k=0; k<regions.size(); k++){
+				vector<Point> midPoints;
+				Region& currentRegion = regions.at(k);
+				for(int side=0; side<4; side++)
+					midPoints.push_back(getMidPoint(currentRegion, (enum direction)side));
+			
+				for(int i=0; i<regions.size(); i++){
+					Region& neighborRegion = regions.at(i);
+					if((i|k)!=0 && currentRegion.square.height<=neighborRegion.square.height){
+						for(int side=0; side<4; side++){
+							if(neighborRegion.square.contains(midPoints.at(side))){
+								currentRegion.adj.insert(&neighborRegion);
+								neighborRegion.adj.insert(&currentRegion);
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		static void merge(){
+			for(int k=0; k<regions.size(); k++){
+				Region& current = regions.at(k);
+				set<Region*>::iterator it;
+				for(it=current.adj.begin(); it!=current.adj.end(); it++){
+					Region& neighbor = *(*it);
+					if(abs(current.meanH-neighbor.meanH)<=10)
+						neighbor.meanH = (neighbor.meanH+current.meanH)/2;
+				}
+			}
+		}
+
+		static void print(){
+			Mat tempHSV = Mat::zeros(HSVMatrix.size(), HSVMatrix.type());
+			for(int k=0; k<regions.size(); k++)
+				for(int i=regions.at(k).square.y; i<regions.at(k).square.y+regions.at(k).square.height; i++)
+					for(int j=regions.at(k).square.x; j<regions.at(k).square.x+regions.at(k).square.width; j++){
+						tempHSV.at<Vec3b>(i,j)[0] = saturate_cast<uchar>(regions.at(k).meanH);
+						tempHSV.at<Vec3b>(i,j)[1] = HSVMatrix.at<Vec3b>(i,j)[1];
+						tempHSV.at<Vec3b>(i,j)[2] = HSVMatrix.at<Vec3b>(i,j)[2];
+					}
+			outputBGR = tempHSV.clone();
+			cvtColor(outputBGR, outputBGR, COLOR_HSV2BGR);
+			imwrite("outputBGR.png", outputBGR); 
+		}
+};
+
+vector<Region> Region::regions;
+
+void splitMatrix(int rowStart, int rowEnd, int colStart, int colEnd){
+	Region currentR(Point(rowStart,colStart), Point(rowEnd, colEnd));
+	if((rowEnd-rowStart+1)*(colEnd-colStart+1)<=AREA_THRESHOLD){
+		Region::regions.push_back(currentR);
+		return;
+	}
+	if(currentR.isUniform()){
+		Region::regions.push_back(currentR);
+		return;
+	}else{
+		splitMatrix(rowStart, (rowStart+rowEnd)/2, colStart, (colStart+colEnd)/2);
+		splitMatrix(rowStart, (rowStart+rowEnd)/2, ((colStart+colEnd)/2)+1, colEnd);
+		splitMatrix(((rowStart+rowEnd)/2)+1, rowEnd, colStart, (colStart+colEnd)/2);
+		splitMatrix(((rowStart+rowEnd)/2)+1, rowEnd,((colStart+colEnd)/2)+1, colEnd);
+	}
+}
+
+void splitAndMerge(){
+	int N = sourceMatrix.rows;
+	int M = sourceMatrix.cols;
+	splitMatrix(0, N-1, 0, M-1);
+	Region::print();
+	namedWindow("outputBGR", WINDOW_AUTOSIZE);
+	imshow("outputBGR", outputBGR);
+	
+    Region::mapAdjacents();
+	Region::merge();
+	Region::print();
+	namedWindow("outputBGRMerged", WINDOW_AUTOSIZE);
+	imshow("outputBGRMerged", outputBGR);
+	waitKey(0);
+}
+
+int main(int argc, char** argv ){
+	if(argc!=2){
+		cerr<<"--- ERROR --- required <executable> <filename.ext>"<<endl;
+		exit(EXIT_FAILURE);
+	}	
+
+	sourceMatrix = imread(argv[1], IMREAD_COLOR);
+	HSVMatrix;
+	int minSize = min(sourceMatrix.rows, sourceMatrix.cols);
+	resize(sourceMatrix, sourceMatrix, Size(minSize, minSize));
+	cvtColor(sourceMatrix, HSVMatrix, COLOR_BGR2HSV);
+	GaussianBlur(sourceMatrix, sourceMatrix, Size(3,3), 3);
+
+	namedWindow("sourceMatrix", WINDOW_AUTOSIZE);
+	imshow("sourceMatrix", sourceMatrix);
+	
+	splitAndMerge();
+
+	return 0;
+}
+
+/*
+#include <stdio.h>
+#include <iostream>
 #include <vector>
 #include <numeric>
 #include <math.h>
@@ -230,3 +419,4 @@ int main(int argc, char** argv )
     splitAndMerge();
     return 0;
 }
+*/

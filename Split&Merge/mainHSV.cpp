@@ -171,8 +171,7 @@ int main(int argc, char** argv ){
 		exit(EXIT_FAILURE);
 	}	
 
-	sourceMatrix = imread(argv[1], IMREAD_COLOR);
-	HSVMatrix;
+	sourceMatrix = imread(argv[1], IMREAD_COLOR);;
 	int minSize = min(sourceMatrix.rows, sourceMatrix.cols);
 	resize(sourceMatrix, sourceMatrix, Size(minSize, minSize));
 	cvtColor(sourceMatrix, HSVMatrix, COLOR_BGR2HSV);

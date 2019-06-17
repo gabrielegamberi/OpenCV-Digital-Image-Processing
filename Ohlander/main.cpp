@@ -10,7 +10,7 @@
 using namespace std;
 using namespace cv;
 
-Mat rawImage, blurredImage, histograms[3];
+Mat rawImage, blurredImage;
 vector<Mat> finalClusters;
 
 class Sample{
@@ -30,7 +30,8 @@ class Sample{
 
 class OhlanderCore{
     public:
-        vector<Sample> channels[3];
+		vector<float> histograms[3];
+        vector<Sample> orderedChannels[3];
         int deltas[3];
         int valley;
         int selectedChannel;
@@ -39,43 +40,42 @@ class OhlanderCore{
             initHist(mask);
             selectedChannel = -1;
             valley = INT_MAX;
-            //popola i canali (BGR) con dei Sample (memorizzo in esso la sua cromaticità e la sua occorrenza)  
-            for(int c=0; c<3; c++)
-                for(int i=0; i<histograms[c].rows; i++)
-                    channels[c].push_back(Sample((int)histograms[c].at<float>(i,0), i));
             calcDeltas();
-            for(int c=0; c<3; c++)
-                sort(channels[c].begin(), channels[c].end());
         }
 
         void initHist(Mat mask){
-            Mat bgrPlanes[3];
-            split(blurredImage, bgrPlanes);
+			//inizializzo a zero gli istogrammi
+			for(int channel=0; channel<3; channel++)
+				histograms[channel] = vector<float>(256, 0);
 
-            /// Establish the number of bins
-            int histSize = 256;
-            
-            /// Set the ranges ( for B,G,R) )
-            float range[] = {0,256} ;
-            const float* histRange = {range};
-            /// Compute the histograms:
-            calcHist( &bgrPlanes[0], 1, 0, mask, histograms[0], 1, &histSize, &histRange);
-            calcHist( &bgrPlanes[1], 1, 0, mask, histograms[1], 1, &histSize, &histRange);
-            calcHist( &bgrPlanes[2], 1, 0, mask, histograms[2], 1, &histSize, &histRange);
-        }
+			for(int row=0; row<blurredImage.rows; row++)
+				for(int col=0; col<blurredImage.cols; col++)
+					if(mask.at<uchar>(row,col)==1)
+						for(int channel=0; channel<3; channel++)
+							histograms[channel].at(blurredImage.at<Vec3b>(row,col)[channel])++;	
+			
+            //popola i canali (BGR) con dei Sample (memorizzo in esso la sua cromaticità e la sua occorrenza)  
+            for(int c=0; c<3; c++)
+                for(int i=0; i<histograms[c].size(); i++)
+                    orderedChannels[c].push_back(Sample((int)histograms[c].at(i), i));				
+			
+			//ordinali in senso decrescente (override dell'operatore nella classe Sample)
+            for(int c=0; c<3; c++)
+                sort(orderedChannels[c].begin(), orderedChannels[c].end());		
+		}
 
 
         void calcDeltas(){
             int leftIndex,rightIndex;
             for(int c=0; c<3; c++){
-                for(int l=0; l<histograms[c].rows; l++){
-                    if(histograms[c].at<float>(l,0)!=0){
+                for(int l=0; l<histograms[c].size(); l++){
+                    if(histograms[c].at(l)!=0){
                         leftIndex = l;
                         break;
                     }
                 }
-                for(int r=histograms[c].rows-1; r>=0; r--){
-                    if(histograms[c].at<float>(r,0)!=0){
+                for(int r=histograms[c].size()-1; r>=0; r--){
+                    if(histograms[c].at(r)!=0){
                         rightIndex = r;
                         break;
                     }
@@ -89,12 +89,12 @@ class OhlanderCore{
             Sample max, secondMax;
             //determina i picchi (hills) di ogni canale
             for(int c=0; c<3; c++){
-                max = channels[c].at(0);
+                max = orderedChannels[c].at(0);
                 secondMax = max;
-                for(int i=1; i<histograms[c].rows; i++){
+                for(int i=1; i<histograms[c].size(); i++){
                     //se il picco successivo dista DELTA dal massimo, allora consideralo come secondo massimo
-                    if(abs(max.chromaticity-channels[c].at(i).chromaticity)>deltas[c]){
-                        secondMax = channels[c].at(i);
+                    if(abs(max.chromaticity-orderedChannels[c].at(i).chromaticity)>deltas[c]){
+                        secondMax = orderedChannels[c].at(i);
                         break;
                     }
                 }
